@@ -1,0 +1,23 @@
+{
+    "name": "micaherne/moodle-deconstruct",
+    "description": "Scripts for splitting Moodle plugins into standalone repos",
+    "require": {
+        "symfony/console": "^3.0",
+        "symfony/process": "^3.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^5.0"
+    },
+    "license": "GPL-3.0",
+    "authors": [
+        {
+            "name": "Michael Aherne",
+            "email": "micaherne@blueyonder.co.uk"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "MoodleDeconstruct\\" : "src\\"
+        }
+    }
+}
