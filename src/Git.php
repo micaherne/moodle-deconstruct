@@ -47,7 +47,14 @@ class Git {
 	}
 
 	protected function _get_lines() {
-		return explode("\n", trim($this->process->getOutput()));
+	    $lines = trim($this->process->getOutput());
+
+	    // Avoid array of single empty string
+        if (empty($lines)) {
+            return [];
+        }
+
+		return explode("\n", $lines);
 	}
 
 	public function lines(Callable $callback) {
@@ -61,6 +68,9 @@ class Git {
 	}
 
 	public function extractDirectory($directory) {
+
+	    $refsRoot = $this->refsRoot . '/' . str_replace('/', '_', $directory);
+
 		$allrevs = $this("rev-list --branches --reverse -- $directory")->lines;
 
 		$messagefile = tempnam(sys_get_temp_dir(), 'extract');
@@ -84,18 +94,22 @@ class Git {
 				// If parent also affected this directory we should have it
 				// already mapped
 				if (in_array($parent, $allrevs)) {
-					$parentmap = $this->refsRoot . '/map/' . $parent;
+					$parentmap = $refsRoot . '/map/' . $parent;
 				} else {
 					// find the most recent ancestor of the parent that affected this directory
 					// basically second line of
 					//    git rev-list [root]..[parent] -- [dir]
 					$between = $this("rev-list {$allrevs[0]}..{$parent} --max-count=2 -- $directory")->lines;
-					print_r($between);
+
 					if (count($between) == 2 && $between[0] == $parent) {
-						//echo "FOUND: {$between[1]}\n";
-						$parentmap = $this->refsRoo . '/map/' . $between[1];
-					} else {
-						//echo "NOT FOUND: Parent for $parent\n";
+						echo "FOUND: {$between[1]}\n";
+						$parentmap = $refsRoot . '/map/' . $between[1];
+					} else if (count($between) >= 1 && $between[0] != $parent) {
+					    echo "FOUND: {$between[0]}\n";
+					    $parentmap = $refsRoot . '/map/' . $between[0];
+				    } else {
+						echo "NOT FOUND: Parent for $parent\n";
+						print_r($between);
 						continue;
 					}
 				}
@@ -136,10 +150,10 @@ class Git {
 
 			$newcommit = trim($p->getOutput());
 
-			$newref = $this->refsRoot . '/map/' . $rev;
+			$newref = $refsRoot . '/map/' . $rev;
 			$this("update-ref $newref $newcommit");
 
-			echo "OLD COMMIT: $rev\nNEW COMMIT: $newcommit\n";
+			echo "OLD COMMIT: $rev\nNEW COMMIT: $newcommit\n\n\n";
 		}
 	}
 
