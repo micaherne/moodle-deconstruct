@@ -76,7 +76,7 @@ class Git {
 		$messagefile = tempnam(sys_get_temp_dir(), 'extract');
 
 		// First rev treated as root
-		$root = true;
+		$root = true; $allrevs = [];
 		foreach ($allrevs as $rev) {
 			$commit = $this("cat-file commit $rev")->all;
 			$commitdata = $this->parseCommit($commit);
@@ -96,20 +96,11 @@ class Git {
 				if (in_array($parent, $allrevs)) {
 					$parentmap = $refsRoot . '/map/' . $parent;
 				} else {
-					// find the most recent ancestor of the parent that affected this directory
-					// basically second line of
-					//    git rev-list [root]..[parent] -- [dir]
-					$between = $this("rev-list {$allrevs[0]}..{$parent} --max-count=2 -- $directory")->lines;
-
-					if (count($between) == 2 && $between[0] == $parent) {
-						echo "FOUND: {$between[1]}\n";
-						$parentmap = $refsRoot . '/map/' . $between[1];
-					} else if (count($between) >= 1 && $between[0] != $parent) {
-					    echo "FOUND: {$between[0]}\n";
-					    $parentmap = $refsRoot . '/map/' . $between[0];
-				    } else {
+					if ($ancestor = $this->nearestAncestor($parent, $directory)) {
+					    echo "FOUND: $ancestor\n";
+					    $parentmap = $refsRoot . '/map/' . $ancestor;
+					} else {
 						echo "NOT FOUND: Parent for $parent\n";
-						print_r($between);
 						continue;
 					}
 				}
@@ -155,6 +146,20 @@ class Git {
 
 			echo "OLD COMMIT: $rev\nNEW COMMIT: $newcommit\n\n\n";
 		}
+
+		// Rewrite branches
+		$refs = $this('show-ref')->lines;
+		foreach($refs as $ref) {
+		    $matches = [];
+		    if (!preg_match('|(.{40}) refs/remotes/origin/(.*)$|', $ref, $matches)) {
+		        continue;
+		    }
+
+		    // TODO: Write the mapped commit to $refsRoot/heads/{$matches[2]}
+		    echo "{$matches[1]} $refsRoot/heads/{$matches[2]}\n";
+		    $mappedcommit = $this->mappedCommit($matches[1], $directory);
+
+		}
 	}
 
 	/**
@@ -193,6 +198,41 @@ class Git {
 			}
 		}
 		return $result;
+	}
+
+	/**
+	 * Find the nearest ancestor of the given commit that touched the directory.
+	 *
+	 * @param string $commit the commit hash
+	 * @param string $directory the directory path
+	 * @param boolean $includeself return the commit if it affected the directory?
+	 */
+	public function nearestAncestor($commit, $directory, $includeself = true) {
+
+	    $between = $this("rev-list {$commit} --max-count=2 -- $directory")->lines;
+
+	    if (!$includeself && count($between) == 2 && $between[0] == $commit) {
+	        return $between[1];
+	    } else if (count($between) >= 1 && $between[0] != $commit) {
+	        return $between[0];
+	    } else if ($includeself && count($between) >=1 && $between[0] == $commit) {
+	        return $commit;
+	    }
+
+	    return null;
+	}
+
+	public function mappedCommit($commit, $directory) {
+	    $refsRoot = $this->refsRoot . '/' . str_replace('/', '_', $directory);
+	    $parentmap = $refsRoot . '/map/' . $commit;
+	    $mappedref = $this("show-ref $parentmap")->all;
+	    if (empty(trim($mappedref))) {
+	        return null;
+	    }
+
+	    list ($mappedcommit, $ref) = explode(" ", $mappedref, 2);
+
+	    return $mappedcommit;
 	}
 
 }
